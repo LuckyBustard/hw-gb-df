@@ -4,6 +4,7 @@ from time import time
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.auth.models import PermissionsMixin, UserManager
 from django.core.validators import EmailValidator
+from django.contrib.auth.validators import ASCIIUsernameValidator
 from django.core.mail import send_mail
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -25,13 +26,14 @@ class CustomUserManager(UserManager):
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):
     email_validator = EmailValidator()
+    username_validator = ASCIIUsernameValidator()
 
     username = models.CharField(
         _("username"),
         max_length=150,
         unique=True,
-        help_text=_("Required. 150 characters or fewer. Email only."),
-        validators=[email_validator],
+        help_text=_("Required. 150 characters or fewer. ASCII letters and digits only."),
+        validators=[username_validator],
         error_messages={
             "unique": _("A user with that username already exists."),
         },
@@ -52,6 +54,16 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
             "Designates whether this user should be treated as active. \
             Unselect this instead of deleting accounts."
         ),
+    )
+    email = models.CharField(
+        _("email address"),
+        max_length=256,
+        unique=True,
+        null=True,
+        validators=[username_validator],
+        error_messages={
+            "unique": _("A user with that email address already exists."),
+        },
     )
     date_joined = models.DateTimeField(_("date joined"), auto_now_add=True)
 
