@@ -1,6 +1,6 @@
 from django.contrib.auth.mixins import PermissionRequiredMixin, LoginRequiredMixin
 from django.urls import reverse_lazy
-from django.views.generic import CreateView, DeleteView, DetailView, TemplateView, UpdateView
+from django.views.generic import CreateView, DeleteView, DetailView, TemplateView, UpdateView, ListView
 from mainapp import forms as mainapp_forms
 from mainapp import models as mainapp_models
 from django.http import JsonResponse
@@ -12,16 +12,12 @@ class MainPageView(TemplateView):
     template_name = "mainapp/index.html"
 
 
-class NewsPageView(TemplateView):
-    template_name = "mainapp/news_list.html"
+class NewsPageView(ListView):
+    model = mainapp_models.News
+    paginate_by = 5
 
-    def get_context_data(self, page=1, **kwargs):
-        context = super().get_context_data(**kwargs)
-        start = (page - 1) * 5
-        stop = start + 5
-        context["page_num"] = page
-        context["news_items"] = mainapp_models.News.objects.order_by('-updated').all()[start:stop]
-        return context
+    def get_queryset(self):
+        return super().get_queryset().filter(deleted=False)
 
 
 class NewsDetailPageView(TemplateView):
@@ -48,28 +44,42 @@ class CoursesPageView(TemplateView):
         return context
 
 
-class CoursesDetailPageView(TemplateView):
+class CoursesDetailView(TemplateView):
     template_name = "mainapp/courses_detail.html"
 
-    def get_context_data(self, course_id, **kwargs):
-        context = super().get_context_data(**kwargs)
-        try:
-            context['course_detail'] = mainapp_models.Courses.objects.get(pk=course_id)
-        except:
-            raise Http404("Курс не найден")
-
-        context["lessons"] = mainapp_models.Lesson.objects.filter(course=context["course_detail"])
-        context["teachers"] = mainapp_models.CourseTeachers.objects.filter(course=context["course_detail"])
+    def get_context_data(self, pk=None, **kwargs):
+        logger.debug("Yet another log message")
+        context = super(CoursesDetailView, self).get_context_data(**kwargs)
+        context["course_object"] = get_object_or_404(mainapp_models.Courses, pk=pk)
+        context["lessons"] = mainapp_models.Lesson.objects.filter(course=context["course_object"])
+        context["teachers"] = mainapp_models.CourseTeachers.objects.filter(course=context["course_object"])
         if not self.request.user.is_anonymous:
             if not mainapp_models.CourseFeedback.objects.filter(
-                    course=context["course_detail"], user=self.request.user
+                course=context["course_object"], user=self.request.user
             ).count():
                 context["feedback_form"] = mainapp_forms.CourseFeedbackForm(
-                    course=context["course_detail"], user=self.request.user
+                    course=context["course_object"], user=self.request.user
                 )
-        context["feedback_list"] = mainapp_models.CourseFeedback.objects.filter(
-            course=context["course_detail"]
-        ).order_by("-created", "-rating")[:5]
+
+        cached_feedback = cache.get(f"feedback_list_{pk}")
+        if not cached_feedback:
+            context["feedback_list"] = (
+                mainapp_models.CourseFeedback.objects.filter(course=context["course_object"])
+                .order_by("-created", "-rating")[:5]
+                .select_related()
+            )
+            cache.set(f"feedback_list_{pk}", context["feedback_list"], timeout=300)  # 5 minutes
+
+            # Archive object for tests --->
+            import pickle
+
+            with open(f"mainapp/fixtures/005_feedback_list_{pk}.bin", "wb") as outf:
+                pickle.dump(context["feedback_list"], outf)
+            # <--- Archive object for tests
+
+        else:
+            context["feedback_list"] = cached_feedback
+
         return context
 
 
