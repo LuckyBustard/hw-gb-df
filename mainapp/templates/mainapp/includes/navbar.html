@@ -44,6 +44,11 @@
                                     раздел</a>
                             {% endif %}
                             <div class="dropdown-divider"></div>
+                            {% if user.is_superuser %}
+                                <a class="dropdown-item" href="{% url 'mainapp:log_view' %}"
+                                   target="_blank">Лог</a>
+                            {% endif %}
+                            <div class="dropdown-divider"></div>
                             <a class="dropdown-item" href="{% url 'authapp:logout' %}">Выход</a>
                         </div>
                     </li>
