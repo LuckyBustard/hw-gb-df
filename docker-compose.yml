@@ -1,6 +1,46 @@
 version: '3.1'
 
 services:
+  front:
+    container_name: "front"
+    build:
+      context: .
+      dockerfile: front.dockerfile
+    ports:
+      - "8081:80"
+    networks:
+      - back
+
+  celery:
+    build:
+      context: .
+      dockerfile: celery.dockerfile
+    command: celery -A config worker -l INFO
+    environment:
+      - DEBUG=1
+      - SECRET_KEY=3h5@e047d+nk&0i+afo@6a-o*r*wnicj2e@gqpbno&*(zx4k10
+      - DJANGO_ALLOWED_HOSTS=localhost 127.0.0.1 [::1]
+      - CELERY_BROKER=redis://redis:6379/0
+      - CELERY_BACKEND=redis://redis:6379/0
+      - DJANGO_SETTINGS_MODULE=config.conf_prod
+    depends_on:
+      - django
+      - redis
+    networks:
+      - back
+
+  django:
+    container_name: "django"
+    build:
+      context: .
+      dockerfile: django.dockerfile
+    command: "gunicorn hello_django.wsgi:application --bind 0.0.0.0:8000"
+    depends_on:
+      - postgres
+      - redis
+      - front
+    networks:
+      - back
 
   postgres:
     container_name: "db"
@@ -8,6 +48,7 @@ services:
     restart: always
     environment:
       - 'POSTGRES_DB=mian'
+      - 'POSTGRES_USER=user'
       - 'POSTGRES_PASSWORD=pass'
       - 'POSTGRES_HOST_AUTH_METHOD=trust'
     volumes:

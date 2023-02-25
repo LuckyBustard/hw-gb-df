@@ -1,0 +1,3 @@
+FROM celery:latest
+
+COPY ./ .
